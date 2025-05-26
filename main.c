@@ -5,6 +5,7 @@
  * Author : Fares ELLAKANY
  */ 
 
+#include <avr/io.h>
 
 /* UTILES_LIB */
 #include "STD_TYPES.h"
@@ -33,7 +34,7 @@ void action_OVF0(void);
 #define TCNT0_REG           (*(volatile u8*)0x52)
 
 /* ICU calculations variables*/
-u8 ovfc,es;
+volatile static u8 ovfc,es;
 u32 onc,ont,pc,pt;
 
 /* Frequency, Duty and loop exit counter */
@@ -41,8 +42,19 @@ u32 f;
 u32 d;
 u8 i;
 
+/* Switch 3 */
+u8 local_u8SW3=1;
+
 int main(void)
 {
+	
+	/* Switch for choosing internal Source */
+	
+	DIO_voidSetPinDirection(DIO_PORTD, DIO_PIN7, DIO_PIN_INPUT); //SW3 as I/P
+	DIO_voidActivePinInPullUpResistance(DIO_PORTD, DIO_PIN7);    //pull up	
+	
+	/* Configurable delay  () to be replaced with hash*/ 
+	_delay_ms(1000);
 	
     /* Enable General interrupt */
 	GI_voidEnable();
@@ -54,15 +66,11 @@ int main(void)
 	DIO_voidSetPinDirection(DIO_PORTD, DIO_PIN2, DIO_PIN_INPUT);
     EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE); //push
 	
-	
-	
 	/* External interrupt set call back function and enable external input and set event state to zero */
 
 	EXTI_voidSetCallBackINT0(&funActionINT0);
 	es=0;
-	d=50;
 	EXTI_voidEnable(EXTI_INT0);
-	
 	
 	/* Timer0 Set callback function and start */
 
@@ -71,9 +79,7 @@ int main(void)
 	
 	/* LCD Initiation function for Display*/	
 	LCD_voidInit();
-	
-	//LCD_voidDisplayString((u8*)"Frequency in KHzz");
-	 
+		 
 	 /* Set PWM0 port as output port */
 	DIO_voidSetPinDirection(DIO_PORTB, DIO_PIN3, DIO_PIN_OUTPUT);	
 	PWM0_voidInit();
@@ -81,9 +87,6 @@ int main(void)
 	/* Calculate Frequency by ICU and displaying it on LCD and Oscilloscope */
     LCD_voidDisplayChar('F');
 	LCD_voidDisplayChar('=');
-	//u8 x1=(f*100)/10;
-	//u8 x2=(f*100)%10;
-	//PWM0_voidGeneratePWM(50);
 	LCD_voidDisplayChar('2'); 
 	LCD_voidDisplayChar('5'); 
 	LCD_voidDisplayChar('0'); 
@@ -91,8 +94,66 @@ int main(void)
 	LCD_voidDisplayChar('H'); 
 	LCD_voidDisplayChar('z');  
 	
+	/* Blocking variables*/
+	
+	u8 k=1;
+    u8 q=1;
+	
 	while(1)
-	{		}
+	{
+		/* Check for push button status*/
+		DIO_voidGetPinValue(DIO_PORTD, DIO_PIN7, &local_u8SW3);
+		
+		if(3==es)    
+		{
+			
+			f=(1000000UL)/((pt+(pc*256))*4);
+			d=((ont+(onc*256))*4)/((pt+(pc*256))*4);
+			es=4;
+			
+			/* Generate and Display external signal by default*/
+			
+			if(q==1 && (d*100)>0 && (d*100)<100)
+			{
+			PWM0_voidGeneratePWM((d*100));
+			LCD_voidDisplayChar(f);
+				q=0;
+			}
+		}
+			
+			
+				//SW3 Is Pressed?
+				if(0 == local_u8SW3 && k==1)
+				{
+					PWM0_voidGeneratePWM((50));
+					k=0;
+					q=0;
+				}
+				else
+				{
+					
+				}
+			
+			
+		}
+			
+			/* Delay to make another capture after one second*/
+		//	EXTI_voidDisable(EXTI_INT0);
+		//	_delay_ms(1000);
+		//	EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE);
+		//	EXTI_voidEnable(EXTI_INT0);
+		//	if(d*100<100 && d*100>0 && k==1)
+		//	{PWM0_voidGeneratePWM(d*100);
+		//		k=0;
+		//	}	
+		//	while(f>0)
+		//	{
+		//        f=500;	
+		//		LCD_voidDisplayChar(f%10);
+		//		f=f/10;	
+		//	}
+			
+		
 		
 }
 
@@ -101,6 +162,7 @@ void funActionINT0(void)
 {
 	if(0 ==es)
 	{
+		 
 		ovfc=0;
 		TCNT0_REG=0;
 		EXTI_voidInit(EXTI_INT0, EXTI_FALLING_EDGE);
@@ -110,6 +172,7 @@ void funActionINT0(void)
 	
 	}else if(1==es)
 	{
+		
 		ont=TCNT0_REG;
 		onc=ovfc;
 		EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE);
@@ -118,6 +181,8 @@ void funActionINT0(void)
 		
 	}else if(2==es)
 	{
+	
+	  
 	  pt=TCNT0_REG;
 	  pc=ovfc;
 	  EXTI_voidInit(EXTI_INT0, EXTI_FALLING_EDGE);
@@ -126,18 +191,7 @@ void funActionINT0(void)
 	
 	}
 	
-	if(3==es)
-	{
-		f=(1000000UL)/((pt+(pc*256))*4);
-		d=((ont+(onc*256))*4)/((pt+(pc*256))*4);
-		es=0;
-		
-		/* Delay to make another capture after one second*/
-		EXTI_voidDisable(EXTI_INT0);
-		_delay_ms(1000);
-		EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE);
-		if(d*100<100 && d*100>0)
-		{PWM0_voidGeneratePWM(d*100);}
+
 		
 	//	u32 * ptr[8];
 	//	for(u8 j=8; j>-1;j--)
@@ -151,31 +205,17 @@ void funActionINT0(void)
 	//		LCD_voidDisplayChar(ptr[j]);
 			
 	//	}
-		while(f>0)
-		{
-			LCD_voidDisplayChar(f%10);
-			f=f/10;
 		
-		}
 		
 		
 	}
 	
 	
-}
+
 
 void action_OVF0(void)
 {
+	
 	ovfc++;
+	
 }
-
-//void __vector_2 (void) __attribute__((signal));
-//void __vector_2 (void)
-//{
-//	//Action
-//	DIO_voidSetPinDirection(DIO_PORTD, DIO_PIN2, DIO_PIN_INPUT); //INT0
-//}
-//void action_OVF0(void)
-//{
-//	LED_voidToggle(DIO_PORTC, DIO_PIN2);
-//}
