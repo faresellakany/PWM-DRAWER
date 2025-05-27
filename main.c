@@ -5,6 +5,8 @@
  * Author : Fares ELLAKANY
  */ 
 
+
+
 #include <avr/io.h>
 
 /* UTILES_LIB */
@@ -34,19 +36,22 @@ void action_OVF0(void);
 #define TCNT0_REG           (*(volatile u8*)0x52)
 
 /* ICU calculations variables*/
-volatile static u8 ovfc,es;
+volatile static u32 ovfc,es;
 u32 onc,ont,pc,pt;
 
 /* Frequency, Duty and loop exit counter */
 u32 f;
 u32 d;
-u8 i;
+u8 i=1;
 
 /* Switch 3 */
 u8 local_u8SW3=1;
 
 int main(void)
 {
+	/* Blocking variables*/
+	u8 k=1;
+	u8 q=1;
 	
 	/* Switch for choosing internal Source */
 	
@@ -56,6 +61,10 @@ int main(void)
 	/* Configurable delay  () to be replaced with hash*/ 
 	_delay_ms(1000);
 	
+	/* external INT0 DIO direction and set with Rising Edge */
+	DIO_voidSetPinDirection(DIO_PORTD, DIO_PIN2, DIO_PIN_INPUT);
+	
+	
     /* Enable General interrupt */
 	GI_voidEnable();
 	
@@ -63,8 +72,21 @@ int main(void)
 	TMR0_voidInit();
 	
 	/* external INT0 DIO direction and set with Rising Edge */
-	DIO_voidSetPinDirection(DIO_PORTD, DIO_PIN2, DIO_PIN_INPUT);
-    EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE); //push
+	EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE); //push
+	
+	/* LCD Initiation function for Display*/
+	LCD_voidInit();
+	
+	/* Set PWM0 port as output port */
+	DIO_voidSetPinDirection(DIO_PORTB, DIO_PIN3, DIO_PIN_OUTPUT);
+	PWM0_voidInit();
+	
+	
+	/* Timer0 Set callback function and start */
+
+	TMR0_voidSetCallBackOVF(&action_OVF0);
+	TMR0_voidStart();
+	
 	
 	/* External interrupt set call back function and enable external input and set event state to zero */
 
@@ -72,18 +94,6 @@ int main(void)
 	es=0;
 	EXTI_voidEnable(EXTI_INT0);
 	
-	/* Timer0 Set callback function and start */
-
-	TMR0_voidSetCallBackOVF(&action_OVF0);
-	TMR0_voidStart();
-	
-	/* LCD Initiation function for Display*/	
-	LCD_voidInit();
-		 
-	 /* Set PWM0 port as output port */
-	DIO_voidSetPinDirection(DIO_PORTB, DIO_PIN3, DIO_PIN_OUTPUT);	
-	PWM0_voidInit();
-   
 	/* Calculate Frequency by ICU and displaying it on LCD and Oscilloscope */
     LCD_voidDisplayChar('F');
 	LCD_voidDisplayChar('=');
@@ -94,10 +104,7 @@ int main(void)
 	LCD_voidDisplayChar('H'); 
 	LCD_voidDisplayChar('z');  
 	
-	/* Blocking variables*/
 	
-	u8 k=1;
-    u8 q=1;
 	
 	while(1)
 	{
@@ -109,20 +116,26 @@ int main(void)
 			
 			f=(1000000UL)/((pt+(pc*256))*4);
 			d=((ont+(onc*256))*4)/((pt+(pc*256))*4);
-			es=4;
+			es=0;
+			EXTI_voidInit(EXTI_INT0, EXTI_RISING_EDGE);
+			
+			
+			
+			
 			
 			/* Generate and Display external signal by default*/
 			
 			if(q==1 && (d*100)>0 && (d*100)<100)
 			{
 			PWM0_voidGeneratePWM((d*100));
-			LCD_voidDisplayChar(f);
+			LCD_voidDisplayChar('T');
+			//LCD_voidDisplayChar(f);
 				q=0;
 			}
 		}
 			
 			
-				//SW3 Is Pressed?
+				//SW3 Is Pressed? if yes set blocking to be zero and prevent external signal
 				if(0 == local_u8SW3 && k==1)
 				{
 					PWM0_voidGeneratePWM((50));
@@ -180,17 +193,15 @@ void funActionINT0(void)
 		es++;
 		
 	}else if(2==es)
-	{
-	
-	  
+	{ 
 	  pt=TCNT0_REG;
 	  pc=ovfc;
 	  EXTI_voidInit(EXTI_INT0, EXTI_FALLING_EDGE);
 	 
 	  es++;
-	
+	 
 	}
-	
+}
 
 		
 	//	u32 * ptr[8];
@@ -206,16 +217,13 @@ void funActionINT0(void)
 			
 	//	}
 		
-		
-		
-	}
-	
-	
-
 
 void action_OVF0(void)
 {
 	
 	ovfc++;
-	
+	if(i==1){
+	//LCD_voidDisplayChar('T');
+	i=0;
+	}
 }
